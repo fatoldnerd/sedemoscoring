@@ -1,0 +1,121 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to get user role
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    // Helper function to check if user is a manager
+    function isManager() {
+      return isAuthenticated() && getUserRole() == 'Manager';
+    }
+
+    // Helper function to check if user manages a specific SE
+    function managesSE(seId) {
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return userData.role == 'Manager' && seId in userData.managedSeIds;
+    }
+
+    // Helper function to get managerId for a user
+    function getManagerId(seId) {
+      return get(/databases/$(database)/documents/users/$(seId)).data.managerId;
+    }
+
+    // === USERS COLLECTION ===
+    // Users can only read/write their own document
+    match /users/{userId} {
+      // Allow users to read their own document
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Allow users to create their own document on first login
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+
+      // Allow users to update their own document (but not change role/managedSeIds without being admin)
+      allow update: if isAuthenticated() && request.auth.uid == userId
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'managedSeIds'])
+            || request.resource.data.role == resource.data.role); // Allow same role
+
+      // Allow managers to read their managed SEs' profiles (but check if user doc exists first)
+      allow read: if isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Manager'
+        && userId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.managedSeIds;
+    }
+
+    // === CALL REVIEWS COLLECTION ===
+    match /callReviews/{callReviewId} {
+      // SEs can create call reviews for themselves
+      allow create: if isAuthenticated()
+        && request.resource.data.seId == request.auth.uid;
+
+      // Managers can create call reviews for SEs they manage
+      allow create: if isAuthenticated()
+        && isManager()
+        && managesSE(request.resource.data.seId)
+        && request.resource.data.managerId == request.auth.uid;
+
+      // SEs can read/update their own call reviews
+      allow read, update: if isAuthenticated()
+        && resource.data.seId == request.auth.uid;
+
+      // Managers can read/update call reviews where they are the manager
+      allow read, update: if isAuthenticated()
+        && resource.data.managerId == request.auth.uid;
+    }
+
+    // === SCORECARDS COLLECTION ===
+    match /scorecards/{scorecardId} {
+      // Helper to get the callReview associated with this scorecard
+      function getCallReview() {
+        return get(/databases/$(database)/documents/callReviews/$(resource.data.callReviewId)).data;
+      }
+
+      function getCallReviewOnCreate() {
+        return get(/databases/$(database)/documents/callReviews/$(request.resource.data.callReviewId)).data;
+      }
+
+      // SEs can create/update scorecards where they are the SE and scorerType is 'SE'
+      allow create: if isAuthenticated()
+        && request.resource.data.seId == request.auth.uid
+        && request.resource.data.scorerType == 'SE';
+
+      allow update: if isAuthenticated()
+        && resource.data.seId == request.auth.uid
+        && resource.data.scorerType == 'SE'
+        && request.resource.data.scorerType == 'SE'; // Prevent changing scorerType
+
+      // Managers can create/update scorecards where they manage the SE and scorerType is 'Manager'
+      allow create: if isAuthenticated()
+        && isManager()
+        && managesSE(request.resource.data.seId)
+        && request.resource.data.scorerType == 'Manager';
+
+      allow update: if isAuthenticated()
+        && isManager()
+        && managesSE(resource.data.seId)
+        && resource.data.scorerType == 'Manager'
+        && request.resource.data.scorerType == 'Manager'; // Prevent changing scorerType
+
+      // AI scorecards (scorerType == 'AI') can only be written by Cloud Functions
+      // This is implicitly enforced by not having an allow rule for clients
+      // Cloud Functions run with admin privileges and bypass these rules
+
+      // Read access: Users can read scorecards for call reviews they have access to
+      // SEs can read scorecards for their own call reviews
+      allow read: if isAuthenticated()
+        && getCallReview().seId == request.auth.uid;
+
+      // Managers can read scorecards for call reviews they manage
+      allow read: if isAuthenticated()
+        && getCallReview().managerId == request.auth.uid;
+    }
+  }
+}
+

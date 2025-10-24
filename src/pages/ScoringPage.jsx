@@ -77,6 +77,16 @@ function ScoringPage() {
     }));
   };
 
+  const handleSliderChange = (section, criterion, value) => {
+    setScores(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [criterion]: value
+      }
+    }));
+  };
+
   const handleCommentChange = (section, value) => {
     setComments(prev => ({
       ...prev,
@@ -143,6 +153,59 @@ function ScoringPage() {
     );
   };
 
+  const ScoreSlider = ({ section, criterion, maxValue, label }) => {
+    const currentValue = scores[section][criterion];
+    const percentage = (currentValue / maxValue) * 100;
+
+    // Color based on percentage
+    const getColor = () => {
+      if (percentage >= 80) return 'from-green-500 to-emerald-500';
+      if (percentage >= 50) return 'from-yellow-500 to-amber-500';
+      return 'from-red-500 to-rose-500';
+    };
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-bold text-gray-700 dark:text-dark-text flex items-center">
+            <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {label}
+          </label>
+          <div className="flex items-center space-x-2">
+            <span className={`text-3xl font-bold bg-gradient-to-r ${getColor()} bg-clip-text text-transparent`}>
+              {currentValue}
+            </span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">/ {maxValue}</span>
+          </div>
+        </div>
+        <div className="flex items-center space-x-3">
+          <span className="text-xs font-semibold text-gray-500 w-6">0</span>
+          <div className="flex-1 relative">
+            <input
+              type="range"
+              min="0"
+              max={maxValue}
+              step="1"
+              value={currentValue}
+              onChange={(e) => handleSliderChange(section, criterion, parseInt(e.target.value))}
+              className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+              style={{
+                background: `linear-gradient(to right,
+                  rgb(59, 130, 246) 0%,
+                  rgb(59, 130, 246) ${percentage}%,
+                  rgb(229, 231, 235) ${percentage}%,
+                  rgb(229, 231, 235) 100%)`
+              }}
+            />
+          </div>
+          <span className="text-xs font-semibold text-gray-500 w-6 text-right">{maxValue}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-dark-bg dark:to-dark-bg transition-colors duration-200">
       {/* Modern Header */}
@@ -204,46 +267,28 @@ function ScoringPage() {
 
               <div className="space-y-6">
                 {/* Establish Credibility (2 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Establish Credibility (2 pts)
-                  </label>
-                  <div className="flex space-x-2">
-                    <ToggleButton section="introduction" criterion="credibility" value={2} label="Yes (2)" />
-                    <ToggleButton section="introduction" criterion="credibility" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="introduction"
+                  criterion="credibility"
+                  maxValue={2}
+                  label="Establish Credibility (2 pts)"
+                />
 
                 {/* Align on Priorities (5 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Align on Priorities (5 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="introduction" criterion="priorities" value={5} label="Yes (5)" />
-                    <ToggleButton section="introduction" criterion="priorities" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="introduction"
+                  criterion="priorities"
+                  maxValue={5}
+                  label="Align on Priorities (5 pts)"
+                />
 
                 {/* Set Roadmap for the Call (3 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Set Roadmap for the Call (3 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="introduction" criterion="roadmap" value={3} label="Yes (3)" />
-                    <ToggleButton section="introduction" criterion="roadmap" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="introduction"
+                  criterion="roadmap"
+                  maxValue={3}
+                  label="Set Roadmap for the Call (3 pts)"
+                />
 
                 {/* Comments */}
                 <div className="pt-4 border-t border-gray-100">
@@ -305,46 +350,28 @@ function ScoringPage() {
                 </div>
 
                 {/* Use of Industry Terminology (5 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                    </svg>
-                    Use of Industry Terminology (5 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="consultative" criterion="terminology" value={5} label="Yes (5)" />
-                    <ToggleButton section="consultative" criterion="terminology" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="consultative"
+                  criterion="terminology"
+                  maxValue={5}
+                  label="Use of Industry Terminology (5 pts)"
+                />
 
                 {/* Use of up to date functionality (10 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Use of up to date functionality per Features Guide (10 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="consultative" criterion="functionality" value={10} label="Yes (10)" />
-                    <ToggleButton section="consultative" criterion="functionality" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="consultative"
+                  criterion="functionality"
+                  maxValue={10}
+                  label="Use of up to date functionality per Features Guide (10 pts)"
+                />
 
                 {/* Tailor demo content (5 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                    </svg>
-                    Tailor demo content to the priorities of audience (5 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="consultative" criterion="tailoring" value={5} label="Yes (5)" />
-                    <ToggleButton section="consultative" criterion="tailoring" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="consultative"
+                  criterion="tailoring"
+                  maxValue={5}
+                  label="Tailor demo content to the priorities of audience (5 pts)"
+                />
 
                 {/* Comments */}
                 <div className="pt-4 border-t border-gray-100">
@@ -378,46 +405,28 @@ function ScoringPage() {
 
               <div className="space-y-6">
                 {/* Confirm Value (15 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Confirm Value (15 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="workflows" criterion="confirmValue" value={15} label="Yes (15)" />
-                    <ToggleButton section="workflows" criterion="confirmValue" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="workflows"
+                  criterion="confirmValue"
+                  maxValue={15}
+                  label="Confirm Value (15 pts)"
+                />
 
                 {/* Connect the Dots (15 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                    Connect the Dots (15 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="workflows" criterion="connectDots" value={15} label="Yes (15)" />
-                    <ToggleButton section="workflows" criterion="connectDots" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="workflows"
+                  criterion="connectDots"
+                  maxValue={15}
+                  label="Connect the Dots (15 pts)"
+                />
 
                 {/* Confirmation that Pain Point Resolved (10 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Confirmation that Pain Point Resolved if relevant (10 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="workflows" criterion="painResolved" value={10} label="Yes (10)" />
-                    <ToggleButton section="workflows" criterion="painResolved" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="workflows"
+                  criterion="painResolved"
+                  maxValue={10}
+                  label="Confirmation that Pain Point Resolved if relevant (10 pts)"
+                />
 
                 {/* Comments */}
                 <div className="pt-4 border-t border-gray-100">
@@ -451,18 +460,12 @@ function ScoringPage() {
 
               <div className="space-y-6">
                 {/* Confirm priority topics (2 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Confirm we addressed highest priority topics for this call (2 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="close" criterion="priorityTopics" value={2} label="Yes (2)" />
-                    <ToggleButton section="close" criterion="priorityTopics" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="close"
+                  criterion="priorityTopics"
+                  maxValue={2}
+                  label="Confirm we addressed highest priority topics for this call (2 pts)"
+                />
 
                 {/* Confirm buy in (5 pts, P/F) */}
                 <div>
@@ -479,18 +482,12 @@ function ScoringPage() {
                 </div>
 
                 {/* Confirm outstanding deliverables (3 pts) */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center dark:text-dark-text">
-                    <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
-                    Confirm outstanding deliverables from the demo (3 pts)
-                  </label>
-                  <div className="flex space-x-3">
-                    <ToggleButton section="close" criterion="deliverables" value={3} label="Yes (3)" />
-                    <ToggleButton section="close" criterion="deliverables" value={0} label="No (0)" />
-                  </div>
-                </div>
+                <ScoreSlider
+                  section="close"
+                  criterion="deliverables"
+                  maxValue={3}
+                  label="Confirm outstanding deliverables from the demo (3 pts)"
+                />
 
                 {/* Comments */}
                 <div className="pt-4 border-t border-gray-100">

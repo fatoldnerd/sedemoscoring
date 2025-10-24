@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect } from 'react';
+import { useContext, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import { useDarkMode } from '../contexts/DarkModeContext';
@@ -7,6 +7,8 @@ import { createBlankScorecards } from '../services/scorecardService';
 import { getManagedSEs } from '../services/userService';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+import mammoth from 'mammoth';
+import * as pdfjsLib from 'pdfjs-dist';
 
 function NewCallReviewPage() {
   const { currentUser, userProfile, loading } = useContext(AuthContext);
@@ -25,6 +27,13 @@ function NewCallReviewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // File upload state
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
+
   // Load managed SEs if user is a manager
   useEffect(() => {
     if (userProfile?.role === 'Manager') {
@@ -39,6 +48,145 @@ function NewCallReviewPage() {
     } catch (err) {
       console.error('Error loading managed SEs:', err);
       setError('Failed to load SE list');
+    }
+  };
+
+  // Configure PDF.js worker
+  useEffect(() => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  }, []);
+
+  // Extract text from PDF file
+  const extractTextFromPDF = async (file) => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+
+    return fullText;
+  };
+
+  // Extract text from DOCX file
+  const extractTextFromDOCX = async (file) => {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  };
+
+  // Extract text from plain text file
+  const extractTextFromTXT = async (file) => {
+    return await file.text();
+  };
+
+  // Handle file selection and processing
+  const handleFileSelect = async (file) => {
+    if (!file) return;
+
+    // Validate file size (10 MB = 10 * 1024 * 1024 bytes)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setUploadStatus('error');
+      setError('File size exceeds 10 MB limit. Please choose a smaller file.');
+      return;
+    }
+
+    setSelectedFile(file);
+    setUploading(true);
+    setUploadStatus('processing');
+    setError('');
+
+    try {
+      let extractedText = '';
+      const fileName = file.name.toLowerCase();
+
+      if (fileName.endsWith('.txt')) {
+        extractedText = await extractTextFromTXT(file);
+      } else if (fileName.endsWith('.pdf')) {
+        extractedText = await extractTextFromPDF(file);
+      } else if (fileName.endsWith('.docx')) {
+        extractedText = await extractTextFromDOCX(file);
+      } else if (fileName.endsWith('.doc')) {
+        setUploadStatus('error');
+        setError('Legacy .doc files are not supported. Please convert to .docx, .pdf, or .txt format.');
+        setUploading(false);
+        return;
+      } else {
+        // Try reading as plain text for other formats
+        try {
+          extractedText = await extractTextFromTXT(file);
+        } catch (err) {
+          setUploadStatus('error');
+          setError(`Unsupported file format. Please use .txt, .pdf, or .docx files.`);
+          setUploading(false);
+          return;
+        }
+      }
+
+      // Update the transcript field with extracted text
+      setFormData(prev => ({
+        ...prev,
+        transcript: extractedText.trim()
+      }));
+
+      setUploadStatus('success');
+    } catch (err) {
+      console.error('Error processing file:', err);
+      setUploadStatus('error');
+      setError(`Failed to process file: ${err.message}. You can paste the transcript manually instead.`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Handle drag and drop events
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  };
+
+  // Handle file input change
+  const handleFileInputChange = (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  };
+
+  // Clear uploaded file
+  const clearFile = () => {
+    setSelectedFile(null);
+    setUploadStatus('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -68,9 +216,8 @@ function NewCallReviewPage() {
       } else {
         // SE initiating their own call review
         seId = currentUser.uid;
-        // TODO: Get the SE's manager from their user profile
-        // For now, we'll need to add managerId to the SE's profile
-        managerId = userProfile.managerId || currentUser.uid; // Fallback for now
+        // Use the SE's assigned manager, or null if not assigned yet
+        managerId = userProfile.managerId || null;
       }
 
       // Create the call review
@@ -205,7 +352,7 @@ function NewCallReviewPage() {
                   <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                   </svg>
-                  Link to Call Recording *
+                  Link to Call Recording (Optional)
                 </label>
                 <input
                   type="url"
@@ -213,7 +360,6 @@ function NewCallReviewPage() {
                   name="callLink"
                   value={formData.callLink}
                   onChange={handleChange}
-                  required
                   placeholder="https://gong.io/call/123"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-400 transition-all duration-200 bg-white shadow-sm hover:border-primary-300 dark:bg-dark-bg dark:border-dark-border dark:text-dark-text dark:placeholder-dark-text-secondary dark:hover:border-primary-600"
                 />
@@ -221,11 +367,97 @@ function NewCallReviewPage() {
 
               {/* Call Transcript */}
               <div>
-                <label htmlFor="transcript" className="block text-sm font-bold text-gray-700 mb-2 flex items-center dark:text-dark-text">
+                <label className="block text-sm font-bold text-gray-700 mb-4 flex items-center dark:text-dark-text">
                   <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  Paste Call Transcript *
+                  Call Transcript *
+                </label>
+
+                {/* File Upload Section */}
+                <div className="mb-4">
+                  <div
+                    className={`relative border-2 border-dashed rounded-xl p-6 transition-all duration-200 ${
+                      isDragging
+                        ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20'
+                        : uploadStatus === 'success'
+                        ? 'border-green-400 bg-green-50 dark:bg-green-900/20'
+                        : uploadStatus === 'error'
+                        ? 'border-red-400 bg-red-50 dark:bg-red-900/20'
+                        : 'border-gray-300 bg-gray-50 dark:bg-dark-bg dark:border-dark-border'
+                    }`}
+                    onDragEnter={handleDragEnter}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".txt,.pdf,.docx"
+                      onChange={handleFileInputChange}
+                      className="hidden"
+                      id="transcript-file"
+                    />
+
+                    {uploading ? (
+                      <div className="text-center py-4">
+                        <svg className="animate-spin h-10 w-10 mx-auto text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p className="mt-3 text-sm font-medium text-gray-700 dark:text-dark-text">Processing file...</p>
+                      </div>
+                    ) : selectedFile && uploadStatus === 'success' ? (
+                      <div className="text-center py-4">
+                        <svg className="h-10 w-10 mx-auto text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="mt-3 text-sm font-medium text-gray-700 dark:text-dark-text">{selectedFile.name}</p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-dark-text-secondary">File uploaded successfully!</p>
+                        <button
+                          type="button"
+                          onClick={clearFile}
+                          className="mt-3 text-sm text-primary-600 hover:text-primary-700 font-medium dark:text-primary-400"
+                        >
+                          Upload a different file
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <svg className="mx-auto h-12 w-12 text-gray-400 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <div className="mt-4">
+                          <label
+                            htmlFor="transcript-file"
+                            className="cursor-pointer inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-dark-card dark:border-dark-border dark:text-dark-text dark:hover:bg-dark-border"
+                          >
+                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            Upload transcript file
+                          </label>
+                          <p className="mt-2 text-xs text-gray-500 dark:text-dark-text-secondary">or drag and drop</p>
+                        </div>
+                        <p className="mt-3 text-xs text-gray-500 dark:text-dark-text-secondary">
+                          Supported formats: .txt, .pdf, .docx (max 10 MB)
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Or divider */}
+                <div className="flex items-center my-4">
+                  <div className="flex-1 border-t border-gray-300 dark:border-dark-border"></div>
+                  <span className="px-4 text-sm font-medium text-gray-500 dark:text-dark-text-secondary">OR</span>
+                  <div className="flex-1 border-t border-gray-300 dark:border-dark-border"></div>
+                </div>
+
+                {/* Paste textarea */}
+                <label htmlFor="transcript" className="block text-sm font-medium text-gray-700 mb-2 dark:text-dark-text">
+                  Paste transcript text
                 </label>
                 <textarea
                   id="transcript"

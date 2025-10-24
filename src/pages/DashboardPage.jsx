@@ -101,52 +101,35 @@ function DashboardPage() {
   };
 
   const getActionButton = (review) => {
-    const isManager = userProfile.role === 'Manager';
+    // Check if current user is the SE and needs to complete self-score
+    const needsSelfScore = userProfile?.role === 'SE'
+      && review.seId === currentUser?.uid
+      && review.status === 'Pending Self-Score';
 
-    if (review.status === 'Pending Self-Score' && !isManager) {
-      return (
-        <Link
-          to={`/calls/${review.id}/score/SE`}
-          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white text-xs font-bold rounded-lg hover:from-primary-700 hover:to-primary-800 shadow-soft hover:shadow-medium transition-all duration-200 transform hover:scale-105 group"
-        >
-          Complete Self-Score
-          <svg className="w-4 h-4 ml-1.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
-        </Link>
-      );
-    } else if (review.status === 'Pending Manager Review' && isManager) {
-      return (
-        <Link
-          to={`/calls/${review.id}/score/Manager`}
-          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-accent-600 to-accent-700 text-white text-xs font-bold rounded-lg hover:from-accent-700 hover:to-accent-800 shadow-soft hover:shadow-medium transition-all duration-200 transform hover:scale-105 group"
-        >
-          Score Now
-          <svg className="w-4 h-4 ml-1.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
-        </Link>
-      );
-    } else if (review.status === 'Ready for Coaching') {
-      return (
-        <Link
-          to={`/calls/${review.id}/coaching`}
-          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-700 text-white text-xs font-bold rounded-lg hover:from-green-700 hover:to-emerald-800 shadow-soft hover:shadow-medium transition-all duration-200 transform hover:scale-105 group"
-        >
-          View Coaching
-          <svg className="w-4 h-4 ml-1.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
-        </Link>
-      );
-    }
     return (
-      <span className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-400 text-xs font-semibold rounded-lg dark:bg-dark-border dark:text-dark-text-secondary">
-        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        Complete
-      </span>
+      <div className="flex items-center space-x-2">
+        {needsSelfScore && (
+          <Link
+            to={`/calls/${review.id}/score/SE`}
+            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white text-xs font-bold rounded-lg hover:from-green-700 hover:to-green-800 shadow-soft hover:shadow-medium transition-all duration-200 transform hover:scale-105 group"
+          >
+            <svg className="w-4 h-4 mr-1.5 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Score This Call
+          </Link>
+        )}
+        <Link
+          to={`/calls/${review.id}/details`}
+          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-xs font-bold rounded-lg hover:from-blue-700 hover:to-blue-800 shadow-soft hover:shadow-medium transition-all duration-200 transform hover:scale-105 group"
+        >
+          View Details
+          <svg className="w-4 h-4 ml-1.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+        </Link>
+      </div>
     );
   };
 
@@ -161,10 +144,12 @@ function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
-              <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+              <div className="bg-white/90 backdrop-blur-sm rounded-xl p-2">
+                <img
+                  src="/assets/SimproLogo.png"
+                  alt="Simpro Logo"
+                  className="h-10 w-auto"
+                />
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-white">

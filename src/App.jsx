@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import NewCallReviewPage from './pages/NewCallReviewPage';
 import ScoringPage from './pages/ScoringPage';
+import CallReviewDetailsPage from './pages/CallReviewDetailsPage';
 import CoachingViewPage from './pages/CoachingViewPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -40,6 +41,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ScoringPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calls/:callReviewId/details"
+          element={
+            <ProtectedRoute>
+              <CallReviewDetailsPage />
             </ProtectedRoute>
           }
         />

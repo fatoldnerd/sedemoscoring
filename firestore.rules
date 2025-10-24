@@ -52,11 +52,15 @@ service cloud.firestore {
     // === CALL REVIEWS COLLECTION ===
     match /callReviews/{callReviewId} {
       // SEs can create call reviews for themselves
+      // Allow SE to create with null managerId (unassigned) or reference a valid manager
       allow create: if isAuthenticated()
-        && request.resource.data.seId == request.auth.uid;
+        && request.resource.data.seId == request.auth.uid
+        && (request.resource.data.managerId == null
+            || exists(/databases/$(database)/documents/users/$(request.resource.data.managerId)));
 
       // Managers can create call reviews for SEs they manage
       allow create: if isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && isManager()
         && managesSE(request.resource.data.seId)
         && request.resource.data.managerId == request.auth.uid;
@@ -65,8 +69,9 @@ service cloud.firestore {
       allow read, update: if isAuthenticated()
         && resource.data.seId == request.auth.uid;
 
-      // Managers can read/update call reviews where they are the manager
+      // Managers can read/update call reviews where they are the manager (if assigned)
       allow read, update: if isAuthenticated()
+        && resource.data.managerId != null
         && resource.data.managerId == request.auth.uid;
     }
 
@@ -81,11 +86,15 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/callReviews/$(request.resource.data.callReviewId)).data;
       }
 
-      // SEs can create/update scorecards where they are the SE and scorerType is 'SE'
+      // Allow SEs to create ALL THREE blank scorecards (SE, Manager, AI) when creating a new call review
+      // This is for initial setup only - blank scorecards with totalScore = 0 and submittedAt = null
       allow create: if isAuthenticated()
         && request.resource.data.seId == request.auth.uid
-        && request.resource.data.scorerType == 'SE';
+        && request.resource.data.totalScore == 0
+        && request.resource.data.submittedAt == null
+        && request.resource.data.scorerType in ['SE', 'Manager', 'AI'];
 
+      // SEs can only update their own SE scorecard
       allow update: if isAuthenticated()
         && resource.data.seId == request.auth.uid
         && resource.data.scorerType == 'SE'
@@ -93,11 +102,13 @@ service cloud.firestore {
 
       // Managers can create/update scorecards where they manage the SE and scorerType is 'Manager'
       allow create: if isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && isManager()
         && managesSE(request.resource.data.seId)
         && request.resource.data.scorerType == 'Manager';
 
       allow update: if isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && isManager()
         && managesSE(resource.data.seId)
         && resource.data.scorerType == 'Manager'

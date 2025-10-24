@@ -1,4 +1,5 @@
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {defineSecret} = require("firebase-functions/params");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {GoogleGenerativeAI} = require("@google/generative-ai");
@@ -7,12 +8,18 @@ const {GoogleGenerativeAI} = require("@google/generative-ai");
 initializeApp();
 const db = getFirestore();
 
+// Define the Gemini API key as a secret
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
+
 /**
  * Cloud Function that triggers when a new callReview is created.
  * Automatically generates an AI score using Gemini API.
  */
 exports.generateAIScore = onDocumentCreated(
-    "callReviews/{callReviewId}",
+    {
+      document: "callReviews/{callReviewId}",
+      secrets: [geminiApiKey],
+    },
     async (event) => {
       try {
         const callReviewId = event.params.callReviewId;
@@ -26,8 +33,8 @@ exports.generateAIScore = onDocumentCreated(
           return;
         }
 
-        // Get Gemini API key from environment
-        const apiKey = process.env.GEMINI_API_KEY;
+        // Get Gemini API key from secret
+        const apiKey = geminiApiKey.value();
         if (!apiKey) {
           console.error("GEMINI_API_KEY not configured");
           return;
@@ -59,6 +66,8 @@ The scoring criteria are:
    * valuePillar: 0 or 5 pts (Pass/Fail)
    * deliverables: 0 or 3 pts
 
+For each section, you must also provide a supporting quote from the transcript that best illustrates your assessment. The quote should be the exact text from the transcript.
+
 Your JSON response **must** follow this exact schema:
 {
   "scores": {
@@ -72,6 +81,12 @@ Your JSON response **must** follow this exact schema:
     "consultative": "Brief comment on the consultative approach.",
     "workflows": "Brief comment on how they handled the key product workflows.",
     "close": "Brief comment on the close."
+  },
+  "quotes": {
+    "introduction": "Exact quote from the transcript that supports your introduction assessment.",
+    "consultative": "Exact quote from the transcript that supports your consultative selling assessment.",
+    "workflows": "Exact quote from the transcript that supports your workflows assessment.",
+    "close": "Exact quote from the transcript that supports your close assessment."
   },
   "totalScore": 100
 }`;
@@ -93,7 +108,12 @@ Your JSON response **must** follow this exact schema:
         // Parse JSON response
         let aiScoreData;
         try {
-          aiScoreData = JSON.parse(responseText);
+          // Clean markdown code blocks if present
+          let cleanedResponse = responseText.trim();
+          if (cleanedResponse.startsWith("```")) {
+            cleanedResponse = cleanedResponse.replace(/^```json\n?/, "").replace(/\n?```$/, "");
+          }
+          aiScoreData = JSON.parse(cleanedResponse);
         } catch (parseError) {
           console.error("Failed to parse Gemini response as JSON:", parseError);
           console.error("Raw response:", responseText);
@@ -101,7 +121,7 @@ Your JSON response **must** follow this exact schema:
         }
 
         // Validate the response structure
-        if (!aiScoreData.scores || !aiScoreData.comments || typeof aiScoreData.totalScore !== "number") {
+        if (!aiScoreData.scores || !aiScoreData.comments || !aiScoreData.quotes || typeof aiScoreData.totalScore !== "number") {
           console.error("Invalid AI response structure:", aiScoreData);
           return;
         }
@@ -125,6 +145,7 @@ Your JSON response **must** follow this exact schema:
         await aiScorecardDoc.ref.update({
           scores: aiScoreData.scores,
           comments: aiScoreData.comments,
+          quotes: aiScoreData.quotes,
           totalScore: aiScoreData.totalScore,
           submittedAt: new Date(),
         });

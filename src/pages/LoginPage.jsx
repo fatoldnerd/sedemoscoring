@@ -72,13 +72,15 @@ const LoginPage = () => {
       <div className="bg-white/80 backdrop-blur-lg rounded-2xl shadow-strong p-8 sm:p-10 w-full max-w-md relative z-10 animate-scale-in border border-white/20 dark:bg-dark-card/90 dark:border-dark-border">
         {/* Logo/Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-accent-500 rounded-xl mb-4 shadow-medium">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="flex justify-center mb-6">
+            <img
+              src="/assets/SimproLogo.png"
+              alt="Simpro Logo"
+              className="h-20 w-auto"
+            />
           </div>
-          <h1 className="font-bold text-3xl sm:text-4xl bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent mb-2 dark:from-primary-400 dark:to-accent-400">
-            Simpro SE Call Scoring
+          <h1 className="font-bold text-2xl sm:text-3xl text-gray-800 mb-2 dark:text-dark-text">
+            SE Call Scoring
           </h1>
           <p className="text-gray-600 text-sm dark:text-dark-text-secondary">Elevate your demo performance</p>
         </div>

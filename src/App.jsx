@@ -1,11 +1,13 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import ManagerDashboardPage from './pages/ManagerDashboardPage';
 import NewCallReviewPage from './pages/NewCallReviewPage';
 import ScoringPage from './pages/ScoringPage';
 import CallReviewDetailsPage from './pages/CallReviewDetailsPage';
 import CoachingViewPage from './pages/CoachingViewPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import AdminSetupPage from './pages/AdminSetupPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 console.log('App.jsx: Component loaded');
@@ -25,6 +27,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/manager-dashboard"
+          element={
+            <ProtectedRoute>
+              <ManagerDashboardPage />
             </ProtectedRoute>
           }
         />
@@ -65,6 +75,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AnalyticsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin-setup"
+          element={
+            <ProtectedRoute>
+              <AdminSetupPage />
             </ProtectedRoute>
           }
         />

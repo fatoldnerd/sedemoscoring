@@ -16,6 +16,7 @@ function ScoringPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   // Scoring state
   const [scores, setScores] = useState({
@@ -35,6 +36,17 @@ function ScoringPage() {
   useEffect(() => {
     loadData();
   }, [callReviewId, scorerType]);
+
+  // Handle ESC key to close panel
+  useEffect(() => {
+    const handleEsc = (event) => {
+      if (event.key === 'Escape' && isPanelOpen) {
+        setIsPanelOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isPanelOpen]);
 
   const loadData = async () => {
     try {
@@ -547,6 +559,59 @@ function ScoringPage() {
           </form>
         </div>
       </div>
+
+      {/* Floating Transcript Toggle Button */}
+      <button
+        type="button"
+        onClick={() => setIsPanelOpen(!isPanelOpen)}
+        className="fixed bottom-8 right-8 z-40 flex items-center space-x-2 px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl shadow-strong hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span className="font-semibold">View Transcript</span>
+      </button>
+
+      {/* Slide-out Transcript Panel */}
+      {isPanelOpen && (
+        <>
+          {/* Overlay */}
+          <div
+            className="fixed inset-0 bg-black/50 z-50 transition-opacity duration-300"
+            onClick={() => setIsPanelOpen(false)}
+          />
+
+          {/* Panel */}
+          <div className="fixed top-0 right-0 h-full w-full sm:w-3/4 md:w-2/3 lg:w-2/5 bg-white dark:bg-dark-card z-50 shadow-2xl transform transition-transform duration-300 ease-in-out overflow-hidden flex flex-col">
+            {/* Panel Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h2 className="text-xl font-bold text-white">Call Transcript</h2>
+              </div>
+              <button
+                onClick={() => setIsPanelOpen(false)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors duration-200"
+              >
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Panel Content */}
+            <div className="flex-1 overflow-y-auto p-8">
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-700 dark:text-dark-text">
+                  {callReview?.transcript || 'No transcript available'}
+                </pre>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

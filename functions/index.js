@@ -11,6 +11,46 @@ const db = getFirestore();
 // Define the Gemini API key as a secret
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
+// Retry configuration for Gemini API calls
+const MAX_RETRIES = 3; // Try up to 3 additional times (4 total attempts)
+const RETRY_DELAY_MS = 60000; // 1 minute between retries
+
+/**
+ * Helper function to call Gemini API with automatic retry on 503 errors
+ * @param {Object} model - Gemini model instance
+ * @param {string} transcript - Call transcript to analyze
+ * @param {number} maxRetries - Maximum number of retry attempts
+ * @returns {Promise} Gemini API response
+ */
+async function callGeminiWithRetry(model, transcript, maxRetries) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Calling Gemini API (attempt ${attempt + 1}/${maxRetries + 1})...`);
+      const result = await model.generateContent(transcript);
+      console.log(`Gemini API call successful on attempt ${attempt + 1}`);
+      return result;
+    } catch (error) {
+      lastError = error;
+
+      // Check if it's a 503 Service Unavailable (overload) error
+      if (error.status === 503 && attempt < maxRetries) {
+        console.log(`Gemini API overloaded (503). Waiting 60 seconds before retry ${attempt + 2}/${maxRetries + 1}...`);
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        continue; // Retry
+      }
+
+      // If it's not a 503 or we're out of retries, throw the error
+      console.error(`Gemini API call failed on attempt ${attempt + 1}:`, error.message);
+      throw error;
+    }
+  }
+
+  // This should never be reached, but just in case
+  throw lastError;
+}
+
 /**
  * Cloud Function that triggers when a new callReview is created.
  * Automatically generates an AI score using Gemini API.
@@ -97,9 +137,9 @@ Your JSON response **must** follow this exact schema:
           systemInstruction: systemInstruction,
         });
 
-        // Generate AI score
-        console.log("Calling Gemini API...");
-        const result = await model.generateContent(callReviewData.transcript);
+        // Generate AI score with automatic retry on 503 errors
+        console.log("Calling Gemini API with retry logic...");
+        const result = await callGeminiWithRetry(model, callReviewData.transcript, MAX_RETRIES);
         const response = result.response;
         const responseText = response.text();
 

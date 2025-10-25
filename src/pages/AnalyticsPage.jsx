@@ -6,6 +6,20 @@ import { getCallReviewsForSE, getCallReviewsForManager } from '../services/callR
 import { getScorecardsForCallReview } from '../services/scorecardService';
 import { getManagedSEs } from '../services/userService';
 import LoadingSpinner from '../components/LoadingSpinner';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Area,
+  AreaChart
+} from 'recharts';
 
 function AnalyticsPage() {
   const { currentUser, userProfile, loading } = useContext(AuthContext);
@@ -119,138 +133,62 @@ function AnalyticsPage() {
     return path.split('.').reduce((current, prop) => current?.[prop], obj);
   };
 
-  // Format date
+  // Format date for display
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  // Simple Line Chart Component
-  const LineChart = ({ data, lines, height = 200 }) => {
-    if (!data || data.length === 0) {
-      return <p className="text-gray-500 text-center py-8 dark:text-dark-text-secondary">No data available</p>;
-    }
+  // Transform data for Chart 1: Overall Score Trend
+  const overallScoreData = filteredData.map((item, index) => ({
+    name: formatDate(item.callReview.callDate),
+    callName: item.callReview.customerName,
+    seScore: item.scorecards.SE?.totalScore || 0,
+    managerScore: item.scorecards.Manager?.totalScore || 0,
+    aiScore: item.scorecards.AI?.totalScore || 0,
+  }));
 
-    const maxValue = Math.max(...data.map(d =>
-      Math.max(...lines.map(line => line.getValue(d)))
-    ));
-    const width = 100; // percentage
+  // Transform data for Chart 2: Section Score Trends (last 5 calls)
+  const sectionScoreData = filteredData.slice(-5).map((item) => ({
+    name: `${formatDate(item.callReview.callDate)}\n${item.callReview.customerName}`,
+    introduction: calculateSectionTotal(item.scorecards.Manager?.scores, 'introduction'),
+    consultative: calculateSectionTotal(item.scorecards.Manager?.scores, 'consultative'),
+    workflows: calculateSectionTotal(item.scorecards.Manager?.scores, 'workflows'),
+    close: calculateSectionTotal(item.scorecards.Manager?.scores, 'close'),
+  }));
 
-    return (
-      <div className="relative" style={{ height: `${height}px` }}>
-        {/* Y-axis labels */}
-        <div className="absolute left-0 top-0 bottom-0 w-8 flex flex-col justify-between text-xs text-gray-500 dark:text-dark-text-secondary">
-          <span>{maxValue}</span>
-          <span>{Math.round(maxValue / 2)}</span>
-          <span>0</span>
-        </div>
+  // Transform data for Chart 3: Individual Item Trends
+  const individualItemData = filteredData.map((item) => ({
+    name: formatDate(item.callReview.callDate),
+    callName: item.callReview.customerName,
+    seValue: getNestedValue(item.scorecards.SE?.scores, selectedItem) || 0,
+    managerValue: getNestedValue(item.scorecards.Manager?.scores, selectedItem) || 0,
+    aiValue: getNestedValue(item.scorecards.AI?.scores, selectedItem) || 0,
+  }));
 
-        {/* Chart area */}
-        <div className="absolute left-12 right-0 top-0 bottom-8">
-          <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-            {/* Grid lines */}
-            {[0, 0.25, 0.5, 0.75, 1].map((percent, i) => (
-              <line
-                key={i}
-                x1="0"
-                y1={height * percent}
-                x2={width}
-                y2={height * percent}
-                stroke="#e5e7eb"
-                strokeWidth="0.5"
-              />
-            ))}
-
-            {/* Lines */}
-            {lines.map((line, lineIndex) => {
-              const points = data.map((d, i) => {
-                const x = (i / (data.length - 1)) * width;
-                const value = line.getValue(d);
-                const y = height - (value / maxValue) * height;
-                return `${x},${y}`;
-              }).join(' ');
-
-              return (
-                <polyline
-                  key={lineIndex}
-                  points={points}
-                  fill="none"
-                  stroke={line.color}
-                  strokeWidth="2"
-                />
-              );
-            })}
-          </svg>
-        </div>
-
-        {/* X-axis labels */}
-        <div className="absolute left-12 right-0 bottom-0 h-6 flex justify-between text-xs text-gray-500 dark:text-dark-text-secondary">
-          {data.map((d, i) => {
-            if (i % Math.ceil(data.length / 6) === 0 || i === data.length - 1) {
-              return <span key={i}>{formatDate(d.callReview.callDate)}</span>;
-            }
-            return null;
-          })}
-        </div>
-
-        {/* Legend */}
-        <div className="absolute right-0 top-0 flex flex-wrap gap-4 text-xs">
-          {lines.map((line, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: line.color }}></div>
-              <span>{line.label}</span>
+  // Custom Tooltip Component
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white/95 dark:bg-dark-card/95 backdrop-blur-sm border-2 border-gray-200 dark:border-dark-border rounded-xl shadow-strong p-4">
+          <p className="font-bold text-gray-900 dark:text-dark-text mb-2">{label}</p>
+          {payload[0]?.payload?.callName && (
+            <p className="text-sm text-gray-600 dark:text-dark-text-secondary mb-2">{payload[0].payload.callName}</p>
+          )}
+          {payload.map((entry, index) => (
+            <div key={index} className="flex items-center justify-between gap-4 mb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                <span className="text-sm font-medium text-gray-700 dark:text-dark-text-secondary">{entry.name}:</span>
+              </div>
+              <span className="text-sm font-bold text-gray-900 dark:text-dark-text">{entry.value}</span>
             </div>
           ))}
         </div>
-      </div>
-    );
-  };
-
-  // Bar Chart Component for sections
-  const BarChart = ({ data, sections, height = 200 }) => {
-    if (!data || data.length === 0) {
-      return <p className="text-gray-500 text-center py-8 dark:text-dark-text-secondary">No data available</p>;
+      );
     }
-
-    const maxValue = Math.max(...data.map(d =>
-      Math.max(...sections.map(section => section.getValue(d)))
-    ));
-
-    return (
-      <div className="space-y-4">
-        {data.slice(-5).map((item, index) => (
-          <div key={index} className="space-y-1">
-            <p className="text-xs text-gray-600 dark:text-dark-text-secondary">{formatDate(item.callReview.callDate)} - {item.callReview.customerName}</p>
-            <div className="flex gap-1">
-              {sections.map((section, sIndex) => {
-                const value = section.getValue(item);
-                const percentage = (value / section.maxValue) * 100;
-                return (
-                  <div
-                    key={sIndex}
-                    className="h-8 flex items-center justify-center text-xs text-white font-medium rounded"
-                    style={{
-                      width: `${25}%`,
-                      backgroundColor: section.color,
-                      opacity: percentage / 100
-                    }}
-                    title={`${section.label}: ${value}/${section.maxValue}`}
-                  >
-                    {value > 0 && value}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex gap-1 text-xs text-gray-500">
-              {sections.map((section, sIndex) => (
-                <div key={sIndex} className="w-1/4 text-center">{section.label}</div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+    return null;
   };
 
   if (loading || loadingData) {
@@ -310,7 +248,7 @@ function AnalyticsPage() {
       <div className="max-w-7xl mx-auto py-8 sm:px-6 lg:px-8">
         <div className="px-4 sm:px-0">
           {/* Filters */}
-          <div className="bg-white/80 backdrop-blur-sm shadow-medium rounded-2xl p-6 mb-6 border border-gray-100 animate-scale-in dark:bg-dark-card dark:border-dark-border">
+          <div className="bg-white/80 backdrop-blur-sm shadow-medium rounded-2xl p-6 mb-8 border border-gray-100 animate-scale-in dark:bg-dark-card dark:border-dark-border">
             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center dark:text-dark-text">
               <svg className="w-6 h-6 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -364,80 +302,154 @@ function AnalyticsPage() {
           </div>
 
           {/* Chart 1: Overall Score Trend */}
-          <div className="bg-white/80 backdrop-blur-sm shadow-medium rounded-2xl p-8 mb-6 border border-gray-100 animate-scale-in dark:bg-dark-card dark:border-dark-border">
+          <div className="bg-white/80 backdrop-blur-sm shadow-medium rounded-2xl p-8 mb-8 border border-gray-100 animate-scale-in dark:bg-dark-card dark:border-dark-border">
             <div className="flex items-center space-x-2 mb-2">
               <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">1</div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text">Overall Score Trend Over Time</h3>
             </div>
-            <p className="text-sm text-gray-600 mb-6 ml-10 dark:text-dark-text-secondary">
+            <p className="text-sm text-gray-600 mb-8 ml-10 dark:text-dark-text-secondary">
               Displays total scores from all three scorers over time
             </p>
-            <LineChart
-              data={filteredData}
-              lines={[
-                {
-                  label: 'SE Self-Score',
-                  color: '#3b82f6',
-                  getValue: (d) => d.scorecards.SE?.totalScore || 0
-                },
-                {
-                  label: 'Manager Score',
-                  color: '#a855f7',
-                  getValue: (d) => d.scorecards.Manager?.totalScore || 0
-                },
-                {
-                  label: 'AI Score',
-                  color: '#10b981',
-                  getValue: (d) => d.scorecards.AI?.totalScore || 0
-                }
-              ]}
-              height={250}
-            />
+            {overallScoreData.length === 0 ? (
+              <p className="text-gray-500 text-center py-8 dark:text-dark-text-secondary">No data available</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={350}>
+                <AreaChart data={overallScoreData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorSE" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorManager" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorAI" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#6b7280"
+                    style={{ fontSize: '12px' }}
+                  />
+                  <YAxis
+                    stroke="#6b7280"
+                    style={{ fontSize: '12px' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="circle"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="seScore"
+                    name="SE Self-Score"
+                    stroke="#3b82f6"
+                    strokeWidth={3}
+                    fill="url(#colorSE)"
+                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6 }}
+                    animationDuration={1000}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="managerScore"
+                    name="Manager Score"
+                    stroke="#a855f7"
+                    strokeWidth={3}
+                    fill="url(#colorManager)"
+                    dot={{ fill: '#a855f7', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6 }}
+                    animationDuration={1000}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="aiScore"
+                    name="AI Score"
+                    stroke="#10b981"
+                    strokeWidth={3}
+                    fill="url(#colorAI)"
+                    dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6 }}
+                    animationDuration={1000}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Chart 2: Section Score Trends */}
-          <div className="bg-white/80 backdrop-blur-sm shadow-medium rounded-2xl p-8 mb-6 border border-gray-100 animate-scale-in dark:bg-dark-card dark:border-dark-border">
+          <div className="bg-white/80 backdrop-blur-sm shadow-medium rounded-2xl p-8 mb-8 border border-gray-100 animate-scale-in dark:bg-dark-card dark:border-dark-border">
             <div className="flex items-center space-x-2 mb-2">
               <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">2</div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text">Section Score Trends</h3>
             </div>
-            <p className="text-sm text-gray-600 mb-6 ml-10 dark:text-dark-text-secondary">
-              Score breakdown by section (Last 5 calls)
+            <p className="text-sm text-gray-600 mb-8 ml-10 dark:text-dark-text-secondary">
+              Score breakdown by section (Last 5 calls, based on Manager scores)
             </p>
-            <BarChart
-              data={filteredData}
-              sections={[
-                {
-                  label: 'Intro',
-                  color: '#3b82f6',
-                  maxValue: 10,
-                  getValue: (d) => calculateSectionTotal(d.scorecards.Manager?.scores, 'introduction')
-                },
-                {
-                  label: 'Consultative',
-                  color: '#a855f7',
-                  maxValue: 40,
-                  getValue: (d) => calculateSectionTotal(d.scorecards.Manager?.scores, 'consultative')
-                },
-                {
-                  label: 'Workflows',
-                  color: '#10b981',
-                  maxValue: 40,
-                  getValue: (d) => calculateSectionTotal(d.scorecards.Manager?.scores, 'workflows')
-                },
-                {
-                  label: 'Close',
-                  color: '#f59e0b',
-                  maxValue: 10,
-                  getValue: (d) => calculateSectionTotal(d.scorecards.Manager?.scores, 'close')
-                }
-              ]}
-              height={200}
-            />
+            {sectionScoreData.length === 0 ? (
+              <p className="text-gray-500 text-center py-8 dark:text-dark-text-secondary">No data available</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={350}>
+                <BarChart data={sectionScoreData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#6b7280"
+                    style={{ fontSize: '11px' }}
+                    interval={0}
+                    angle={-15}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis
+                    stroke="#6b7280"
+                    style={{ fontSize: '12px' }}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="square"
+                  />
+                  <Bar
+                    dataKey="introduction"
+                    name="Introduction (10 pts)"
+                    fill="#3b82f6"
+                    radius={[8, 8, 0, 0]}
+                    animationDuration={1000}
+                  />
+                  <Bar
+                    dataKey="consultative"
+                    name="Consultative (40 pts)"
+                    fill="#a855f7"
+                    radius={[8, 8, 0, 0]}
+                    animationDuration={1000}
+                  />
+                  <Bar
+                    dataKey="workflows"
+                    name="Workflows (40 pts)"
+                    fill="#10b981"
+                    radius={[8, 8, 0, 0]}
+                    animationDuration={1000}
+                  />
+                  <Bar
+                    dataKey="close"
+                    name="Close (10 pts)"
+                    fill="#f59e0b"
+                    radius={[8, 8, 0, 0]}
+                    animationDuration={1000}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Chart 3: Individual Item Trends */}
-          <div className="bg-white/80 backdrop-blur-sm shadow-medium rounded-2xl p-8 mb-6 border border-gray-100 animate-scale-in dark:bg-dark-card dark:border-dark-border">
+          <div className="bg-white/80 backdrop-blur-sm shadow-medium rounded-2xl p-8 mb-8 border border-gray-100 animate-scale-in dark:bg-dark-card dark:border-dark-border">
             <div className="flex items-center space-x-2 mb-2">
               <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-emerald-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">3</div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-dark-text">Individual Item Trend</h3>
@@ -447,9 +459,9 @@ function AnalyticsPage() {
             </p>
 
             {/* Item Selector */}
-            <div className="mb-6">
-              <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mb-8">
+              <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center dark:text-dark-text">
+                <svg className="w-5 h-5 mr-2 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
                 Select Scoring Item
@@ -457,7 +469,7 @@ function AnalyticsPage() {
               <select
                 value={selectedItem}
                 onChange={(e) => setSelectedItem(e.target.value)}
-                className="w-full md:w-1/2 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-400 transition-all duration-200 bg-white shadow-sm hover:border-primary-300"
+                className="w-full md:w-1/2 px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-400 transition-all duration-200 bg-white shadow-sm hover:border-primary-300 dark:bg-dark-bg dark:border-dark-border dark:text-dark-text dark:hover:border-primary-600"
               >
                 {individualItems.map(item => (
                   <option key={item.value} value={item.value}>
@@ -467,27 +479,60 @@ function AnalyticsPage() {
               </select>
             </div>
 
-            <LineChart
-              data={filteredData}
-              lines={[
-                {
-                  label: `SE - ${selectedItemData?.label}`,
-                  color: '#3b82f6',
-                  getValue: (d) => getNestedValue(d.scorecards.SE?.scores, selectedItem) || 0
-                },
-                {
-                  label: `Manager - ${selectedItemData?.label}`,
-                  color: '#a855f7',
-                  getValue: (d) => getNestedValue(d.scorecards.Manager?.scores, selectedItem) || 0
-                },
-                {
-                  label: `AI - ${selectedItemData?.label}`,
-                  color: '#10b981',
-                  getValue: (d) => getNestedValue(d.scorecards.AI?.scores, selectedItem) || 0
-                }
-              ]}
-              height={250}
-            />
+            {individualItemData.length === 0 ? (
+              <p className="text-gray-500 text-center py-8 dark:text-dark-text-secondary">No data available</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart data={individualItemData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#6b7280"
+                    style={{ fontSize: '12px' }}
+                  />
+                  <YAxis
+                    stroke="#6b7280"
+                    style={{ fontSize: '12px' }}
+                    domain={[0, selectedItemData?.max || 'auto']}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="circle"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="seValue"
+                    name={`SE - ${selectedItemData?.label}`}
+                    stroke="#3b82f6"
+                    strokeWidth={3}
+                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 5 }}
+                    activeDot={{ r: 7 }}
+                    animationDuration={1000}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="managerValue"
+                    name={`Manager - ${selectedItemData?.label}`}
+                    stroke="#a855f7"
+                    strokeWidth={3}
+                    dot={{ fill: '#a855f7', strokeWidth: 2, r: 5 }}
+                    activeDot={{ r: 7 }}
+                    animationDuration={1000}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="aiValue"
+                    name={`AI - ${selectedItemData?.label}`}
+                    stroke="#10b981"
+                    strokeWidth={3}
+                    dot={{ fill: '#10b981', strokeWidth: 2, r: 5 }}
+                    activeDot={{ r: 7 }}
+                    animationDuration={1000}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Summary Stats */}
@@ -500,32 +545,32 @@ function AnalyticsPage() {
                 Summary Statistics
               </h3>
               <div className="grid grid-cols-3 gap-6">
-                <div className="text-center bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-2xl p-6 border border-gray-200 shadow-sm">
+                <div className="text-center bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-2xl p-6 border border-gray-200 shadow-sm dark:from-dark-bg dark:to-dark-card dark:border-dark-border">
                   <div className="flex items-center justify-center mb-2">
-                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-8 h-8 text-gray-600 dark:text-dark-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
                   <p className="text-sm font-semibold text-gray-600 mb-2 dark:text-dark-text-secondary">Total Call Reviews</p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-dark-text">{filteredData.length}</p>
                 </div>
-                <div className="text-center bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-2xl p-6 border border-purple-200 shadow-sm">
+                <div className="text-center bg-gradient-to-br from-purple-50 to-purple-100/50 rounded-2xl p-6 border border-purple-200 shadow-sm dark:from-purple-900/20 dark:to-purple-800/20 dark:border-purple-700/30">
                   <div className="flex items-center justify-center mb-2">
                     <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">M</div>
                   </div>
-                  <p className="text-sm font-semibold text-purple-900 mb-2">Average Manager Score</p>
-                  <p className="text-3xl font-bold text-purple-600">
+                  <p className="text-sm font-semibold text-purple-900 mb-2 dark:text-purple-300">Average Manager Score</p>
+                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
                     {Math.round(
                       filteredData.reduce((sum, d) => sum + (d.scorecards.Manager?.totalScore || 0), 0) / filteredData.length
                     )}
                   </p>
                 </div>
-                <div className="text-center bg-gradient-to-br from-green-50 to-green-100/50 rounded-2xl p-6 border border-green-200 shadow-sm">
+                <div className="text-center bg-gradient-to-br from-green-50 to-green-100/50 rounded-2xl p-6 border border-green-200 shadow-sm dark:from-green-900/20 dark:to-green-800/20 dark:border-green-700/30">
                   <div className="flex items-center justify-center mb-2">
                     <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">AI</div>
                   </div>
-                  <p className="text-sm font-semibold text-green-900 mb-2">Average AI Score</p>
-                  <p className="text-3xl font-bold text-green-600">
+                  <p className="text-sm font-semibold text-green-900 mb-2 dark:text-green-300">Average AI Score</p>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-400">
                     {Math.round(
                       filteredData.reduce((sum, d) => sum + (d.scorecards.AI?.totalScore || 0), 0) / filteredData.length
                     )}

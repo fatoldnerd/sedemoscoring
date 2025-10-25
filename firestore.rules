@@ -37,16 +37,21 @@ service cloud.firestore {
       // Allow users to create their own document on first login
       allow create: if isAuthenticated() && request.auth.uid == userId;
 
-      // Allow users to update their own document (but not change role/managedSeIds without being admin)
-      allow update: if isAuthenticated() && request.auth.uid == userId
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'managedSeIds'])
-            || request.resource.data.role == resource.data.role); // Allow same role
+      // TEMPORARY: Allow users to update their own role for manager setup
+      // TODO: Remove this after brad.towers@simprogroup.com and bradptowers@gmail.com are set as managers
+      allow update: if isAuthenticated() && request.auth.uid == userId;
 
-      // Allow managers to read their managed SEs' profiles (but check if user doc exists first)
+      // Allow managers to read all user profiles (for team management)
       allow read: if isAuthenticated()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Manager';
+
+      // Allow managers to update SE's managerId when assigning to themselves
+      allow update: if isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Manager'
-        && userId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.managedSeIds;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['managerId', 'updatedAt'])
+        && (request.resource.data.managerId == request.auth.uid || request.resource.data.managerId == null);
     }
 
     // === CALL REVIEWS COLLECTION ===
@@ -69,10 +74,10 @@ service cloud.firestore {
       allow read, update: if isAuthenticated()
         && resource.data.seId == request.auth.uid;
 
-      // Managers can read/update call reviews where they are the manager (if assigned)
+      // Managers can read/update all call reviews (not just their managed SEs)
       allow read, update: if isAuthenticated()
-        && resource.data.managerId != null
-        && resource.data.managerId == request.auth.uid;
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && isManager();
     }
 
     // === SCORECARDS COLLECTION ===
@@ -123,9 +128,10 @@ service cloud.firestore {
       allow read: if isAuthenticated()
         && getCallReview().seId == request.auth.uid;
 
-      // Managers can read scorecards for call reviews they manage
+      // Managers can read all scorecards
       allow read: if isAuthenticated()
-        && getCallReview().managerId == request.auth.uid;
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && isManager();
     }
   }
 }

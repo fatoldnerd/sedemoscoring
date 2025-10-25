@@ -97,6 +97,24 @@ export const getCallReviewsForManager = async (managerId) => {
 };
 
 /**
+ * Get all call reviews in the organization (for managers)
+ * @returns {Promise<Array>}
+ */
+export const getAllCallReviews = async () => {
+  const callReviewsRef = collection(db, 'callReviews');
+  const q = query(
+    callReviewsRef,
+    orderBy('createdAt', 'desc')
+  );
+
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+};
+
+/**
  * Get call reviews filtered by SE (for manager view)
  * @param {string} managerId - Manager's UID
  * @param {string} seId - SE's UID to filter by
